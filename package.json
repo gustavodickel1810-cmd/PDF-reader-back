@@ -1,0 +1,16 @@
+{
+  "name": "simple-express-server",
+  "version": "1.0.0",
+  "description": "A simple Node.js Express server with CORS and rate limiting.",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "express-rate-limit": "^7.3.1",
+    "node-fetch": "^2.6.1",
+    "form-data": "^4.0.0"
+  }
+}
