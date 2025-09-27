@@ -5,7 +5,7 @@ console.log(`[KeepAlive] Script started at ${new Date().toISOString()}`);
 setInterval(() => {
   console.log(`[KeepAlive] Sending ping at ${new Date().toISOString()}...`);
 
-  fetch('https://pdf-reader-back.onrender.com')
+  fetch('https://your-render-url.onrender.com/api/health')
     .then(res => res.json())
     .then(data => {
       console.log(`[KeepAlive] Response received:`);

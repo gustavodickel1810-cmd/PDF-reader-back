@@ -10,7 +10,7 @@ const port = process.env.PORT || 3000;
 
 // Apply CORS middleware to allow requests from any origin.
 app.use(cors({
-    origin: ['http://localhost:3000', 'http://localhost:8080', 'http://127.0.0.1:5500', '*'],
+    origin: ['http://localhost:3000', 'https://pdf-reader-front.onrender.com'],
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
