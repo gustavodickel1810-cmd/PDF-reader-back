@@ -1,3 +1,4 @@
+
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
@@ -10,18 +11,20 @@ const port = process.env.PORT || 3000;
 // Apply CORS middleware to allow requests from any origin.
 app.use(cors({
     origin: ['http://localhost:3000', 'https://pdf-reader-front.onrender.com'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Added PUT/DELETE for robustness
     allowedHeaders: ['Content-Type', 'Authorization'],
+    // NEW: Expose headers that the client needs to read from the response,
+    // especially Content-Disposition for file downloads.
     exposedHeaders: ['Content-Disposition'] 
 }));
 
-// Placeholder for an external keepAlive module (assuming you have one, or you can remove this line)
-// require('./keepAlive');
+require('./keepAlive');
 
 // Parse JSON request bodies.
 app.use(express.json());
 
 // Define a rate limiter to protect the API.
+// This limits each IP address to 200 requests per 15 minutes (increased for preloading).
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 200, // max 200 requests per IP (increased for audio preloading)
@@ -38,17 +41,16 @@ app.get('/api/data', apiLimiter, (req, res) => {
 
 // TTS API endpoint - generates audio URLs
 app.post('/api/tts', apiLimiter, async (req, res) => {
-    // FIX: Changed voiceName to voice to match the client's request body key.
-    const { text, voice } = req.body; 
+    const { text, voiceName } = req.body;
 
-    if (!text || !voice) {
-        return res.status(400).json({ error: 'Text and voice are required.' });
+    if (!text || !voiceName) {
+        return res.status(400).json({ error: 'Text and voiceName are required.' });
     }
 
     try {
         const formData = new FormData();
         formData.append('msg', text);
-        formData.append('lang', voice); // Use the 'voice' value for the 'lang' parameter to the external API.
+        formData.append('lang', voiceName);
         formData.append('source', 'ttsmp3');
 
         // Make the request to the TTSMP3 API.
@@ -67,7 +69,7 @@ app.post('/api/tts', apiLimiter, async (req, res) => {
             // Forward the URL of the generated audio file back to the client.
             res.json({ audioUrl: data.URL });
         } else {
-            throw new Error('TTSMP3 API failed to generate audio. Check if the voice is supported by TTSMP3.');
+            throw new Error('TTSMP3 API failed to generate audio.');
         }
 
     } catch (error) {
@@ -76,7 +78,8 @@ app.post('/api/tts', apiLimiter, async (req, res) => {
     }
 });
 
-// Audio download proxy endpoint - downloads audio files to bypass CORS
+// NEW: Audio download proxy endpoint - downloads audio files to bypass CORS
+// NEW: Audio download proxy endpoint - downloads audio files to bypass CORS
 app.post('/api/download-audio', apiLimiter, async (req, res) => {
     const { audioUrl } = req.body;
 
@@ -85,9 +88,12 @@ app.post('/api/download-audio', apiLimiter, async (req, res) => {
     }
 
     try {
+        console.log(`Downloading audio from: ${audioUrl}`);
+        
         // Fetch the audio file
         const response = await fetch(audioUrl, {
             method: 'GET',
+            // Include a User-Agent to mimic a browser, which helps avoid server blocks
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
@@ -100,27 +106,31 @@ app.post('/api/download-audio', apiLimiter, async (req, res) => {
         // Get headers from the source response
         const contentType = response.headers.get('content-type') || 'audio/mpeg';
         const contentLength = response.headers.get('content-length');
-        const contentDisposition = response.headers.get('content-disposition') || `inline; filename="audio.mp3"`;
+        const contentDisposition = response.headers.get('content-disposition') || `inline; filename="audio.mp3"`; // Use inline for playback
 
         // Set appropriate headers for streaming
         res.set({
             'Content-Type': contentType,
+            // Pass content length for proper progress tracking on the client side
             ...(contentLength && {'Content-Length': contentLength}),
             'Content-Disposition': contentDisposition,
             'Cache-Control': 'public, max-age=3600', 
+            // CORS headers are handled by the global middleware, but redundancy is fine here
         });
 
-        // Pipe the source response stream directly to the client response stream
+        // 💡 THE FIX: Pipe the source response stream directly to the client response stream
         response.body.pipe(res);
 
         // Handle streaming errors
         response.body.on('error', (err) => {
             console.error('TTSMP3 stream error:', err);
+            // Use res.end() to terminate the response cleanly if an error occurs mid-stream
             res.end(); 
         });
 
     } catch (error) {
         console.error('Audio download proxy error:', error);
+        // Ensure no headers have been sent before sending a JSON error response
         if (!res.headersSent) {
             res.status(500).json({ 
                 error: 'Failed to download audio via proxy.', 
@@ -150,6 +160,12 @@ app.get('/', (req, res) => {
     res.send(`
         <h1>Enhanced PDF Reader Backend</h1>
         <p>Server is running successfully!</p>
+        <h2>Available Endpoints:</h2>
+        <ul>
+            <li><strong>POST /api/tts</strong> - Generate TTS audio URLs</li>
+            <li><strong>POST /api/download-audio</strong> - Download audio files (CORS proxy)</li>
+            <li><strong>GET /api/health</strong> - Health check</li>
+        </ul>
         <p><a href="/api/health">Check API Health</a></p>
     `);
 });
@@ -166,4 +182,7 @@ app.use((error, req, res, next) => {
 // Start the server.
 app.listen(port, () => {
     console.log(`🚀 Enhanced PDF Reader Backend is running on http://localhost:${port}`);
+    console.log(`📝 Test the API at http://localhost:${port}/api/health`);
+    console.log(`🎵 TTS endpoint: POST http://localhost:${port}/api/tts`);
+    console.log(`⬇️  Audio download proxy: POST http://localhost:${port}/api/download-audio`);
 });
