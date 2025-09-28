@@ -79,6 +79,7 @@ app.post('/api/tts', apiLimiter, async (req, res) => {
 });
 
 // NEW: Audio download proxy endpoint - downloads audio files to bypass CORS
+// NEW: Audio download proxy endpoint - downloads audio files to bypass CORS
 app.post('/api/download-audio', apiLimiter, async (req, res) => {
     const { audioUrl } = req.body;
 
@@ -89,9 +90,10 @@ app.post('/api/download-audio', apiLimiter, async (req, res) => {
     try {
         console.log(`Downloading audio from: ${audioUrl}`);
         
-        // Download the audio file
+        // Fetch the audio file
         const response = await fetch(audioUrl, {
             method: 'GET',
+            // Include a User-Agent to mimic a browser, which helps avoid server blocks
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
@@ -101,29 +103,41 @@ app.post('/api/download-audio', apiLimiter, async (req, res) => {
             throw new Error(`Failed to download audio: ${response.status} ${response.statusText}`);
         }
 
+        // Get headers from the source response
         const contentType = response.headers.get('content-type') || 'audio/mpeg';
-        const audioBuffer = await response.buffer();
+        const contentLength = response.headers.get('content-length');
+        const contentDisposition = response.headers.get('content-disposition') || `inline; filename="audio.mp3"`; // Use inline for playback
 
-        // Set appropriate headers for audio response
+        // Set appropriate headers for streaming
         res.set({
             'Content-Type': contentType,
-            'Content-Length': audioBuffer.length,
-            'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type'
+            // Pass content length for proper progress tracking on the client side
+            ...(contentLength && {'Content-Length': contentLength}),
+            'Content-Disposition': contentDisposition,
+            'Cache-Control': 'public, max-age=3600', 
+            // CORS headers are handled by the global middleware, but redundancy is fine here
         });
 
-        // Send the audio buffer as response
-        res.send(audioBuffer);
+        // 💡 THE FIX: Pipe the source response stream directly to the client response stream
+        response.body.pipe(res);
+
+        // Handle streaming errors
+        response.body.on('error', (err) => {
+            console.error('TTSMP3 stream error:', err);
+            // Use res.end() to terminate the response cleanly if an error occurs mid-stream
+            res.end(); 
+        });
 
     } catch (error) {
         console.error('Audio download proxy error:', error);
-        res.status(500).json({ 
-            error: 'Failed to download audio via proxy.', 
-            details: error.message,
-            url: audioUrl
-        });
+        // Ensure no headers have been sent before sending a JSON error response
+        if (!res.headersSent) {
+            res.status(500).json({ 
+                error: 'Failed to download audio via proxy.', 
+                details: error.message,
+                url: audioUrl
+            });
+        }
     }
 });
 
