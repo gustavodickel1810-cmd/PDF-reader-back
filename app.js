@@ -158,8 +158,18 @@ app.get('/api/health', (req, res) => {
             'GET /api/health - Health check'
         ],
         supportedVoices: {
-            english: ['Joanna', 'Matthew', 'Amy', 'Brian', 'Nicole', 'Russell'],
-            portuguese: ['Ricardo', 'Camila', 'Vitoria', 'Cristiano', 'Ines']
+            english: [
+                'Joanna',   // English (US) Female
+                'Matthew',  // English (US) Male
+                'Amy',      // English (UK) Female
+                'George'    // English (UK) Male (Replacement for non-working "Brian")
+            ],
+            portuguese: [
+                'Camila',   // Portuguese (Brazilian) Female
+                'Ricardo',  // Portuguese (Brazilian) Male
+                'Ines',     // Portuguese (European) Female
+                'Cristiano' // Portuguese (European) Male
+            ]
         }
     });
 });
