@@ -11,8 +11,11 @@ const port = process.env.PORT || 3000;
 // Apply CORS middleware to allow requests from any origin.
 app.use(cors({
     origin: ['http://localhost:3000', 'https://pdf-reader-front.onrender.com'],
-    methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Added PUT/DELETE for robustness
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    // NEW: Expose headers that the client needs to read from the response,
+    // especially Content-Disposition for file downloads.
+    exposedHeaders: ['Content-Disposition'] 
 }));
 
 require('./keepAlive');
